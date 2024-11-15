@@ -1,47 +1,7 @@
-use super::soeprotocol_packets_structs::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
 
-pub enum PacketsMinSize {
-    SessionRequest = 14,
-    SessionReply = 21,
-    Disconnect = 6,
-    NetStatusPacket = 42,
-    MultiPacket = 7,
-    DataPacket = 5,
-    Ack = 4,
-}
-
-pub fn check_min_size(rdr: &Cursor<&std::vec::Vec<u8>>, min_size: usize, use_crc: bool) -> bool {
-    if use_crc {
-        return rdr.get_ref().len() >= min_size + 2;
-    } else {
-        return rdr.get_ref().len() >= min_size;
-    }
-}
-
-pub fn disconnect_reason_to_string(reason_id: u16) -> String {
-    match reason_id {
-        0 => "DisconnectReasonIcmpError".to_string(),
-        1 => "DisconnectReasonTimeout".to_string(),
-        2 => "DisconnectReasonNone".to_string(),
-        3 => "DisconnectReasonOtherSideTerminated".to_string(),
-        4 => "DisconnectReasonManagerDeleted".to_string(),
-        5 => "DisconnectReasonConnectFail".to_string(),
-        6 => "DisconnectReasonApplication".to_string(),
-        7 => "DisconnectReasonUnreachableConnection".to_string(),
-        8 => "DisconnectReasonUnacknowledgedTimeout".to_string(),
-        9 => "DisconnectReasonNewConnectionAttempt".to_string(),
-        10 => "DisconnectReasonConnectionRefused".to_string(),
-        11 => "DisconnectReasonConnectErro".to_string(),
-        12 => "DisconnectReasonConnectingToSelf".to_string(),
-        13 => "DisconnectReasonReliableOverflow".to_string(),
-        14 => "DisconnectReasonApplicationReleased".to_string(),
-        15 => "DisconnectReasonCorruptPacket".to_string(),
-        16 => "DisconnectReasonProtocolMismatch".to_string(),
-        _ => "unknown".to_string(),
-    }
-}
+use super::data_packet::DataPacket;
 
 pub fn get_data_end(rdr: &Cursor<&std::vec::Vec<u8>>, use_crc: bool) -> u64 {
     if use_crc {
@@ -91,11 +51,12 @@ pub fn extract_subpacket_data(
 pub fn write_packet_data(wtr: &mut Vec<u8>, data_packet: &mut DataPacket) {
     wtr.write_u16::<BigEndian>(data_packet.sequence)
         .unwrap_or_default();
-    wtr.append(data_packet.get_data());
+    wtr.append(data_packet.get_data_mut());
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::soeprotocol::{data_packet::DataPacket, protocol::SoeOpcode};
 
     #[test]
     fn write_packet_data_test() {
@@ -104,7 +65,7 @@ mod tests {
         ]
         .to_vec();
         let mut wtr = vec![];
-        let mut data_packet = super::DataPacket::new(data_to_pack, 0);
+        let mut data_packet = DataPacket::new(data_to_pack, 0, SoeOpcode::Data as u16);
         super::write_packet_data(&mut wtr, &mut data_packet);
         assert_eq!(
             wtr,
